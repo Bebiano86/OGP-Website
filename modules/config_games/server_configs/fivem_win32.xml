@@ -6,7 +6,9 @@
   <server_exec_name>run.cmd</server_exec_name>
   <cli_template>+exec server.cfg</cli_template>
   <console_log>CitizenFX.log</console_log>
-  <max_user_amount>32</max_user_amount>
+  <max_user_amount>128</max_user_amount>
+  <control_protocol>rcon</control_protocol>
+  <control_protocol_type>old</control_protocol_type>
   <mods>
     <mod key="default">
       <name>None</name>
@@ -52,6 +54,14 @@
       <filepath>server.cfg</filepath>
       <options>s</options>
       <desc>Sets the license key. A license can be generated at: &lt;a href="https://keymaster.fivem.net/"&gt;https://keymaster.fivem.net/&lt;/a&gt;</desc>
+    </field>
+    <field key="set steam_webApiKey" type="text">
+      <default>set steam_webApiKey.*</default>
+      <default_value></default_value>
+      <var>set steam_webApiKey</var>
+      <filepath>server.cfg</filepath>
+      <options>sq</options>
+      <desc>Steam Web API key, if you want to use Steam authentication: &lt;a href="https://steamcommunity.com/dev/apikey/"&gt;https://steamcommunity.com/dev/apikey/&lt;/a&gt;</desc>
     </field>
   </custom_fields>
   <post_install>
@@ -125,6 +135,8 @@ END
 
 rm tmp server.zip cfx-server-data.zip
 rm -rf $PWD/server-data
+echo "@echo off" > run.cmd
+echo "%~dp0\FXServer +set citizen_dir %~dp0\citizen\ %* > CitizenFX.log" >> run.cmd    
   </post_install>
   
   <configuration_files>
