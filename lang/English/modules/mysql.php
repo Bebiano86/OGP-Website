@@ -112,4 +112,7 @@ define('OGP_LANG_db_backup', "DB Backup");
 define('OGP_LANG_download_db_backup', "Download DB Backup");
 define('OGP_LANG_restore_db_backup', "Restore DB Backup");
 define('OGP_LANG_sql_file', "file(.sql)");
+define('OGP_LANG_enter_db_password', "Enter a new password!");
+define('OGP_LANG_db_new_passwd', "New database password");
+define('OGP_LANG_db_save_passwd', "Save new password");
 ?>
