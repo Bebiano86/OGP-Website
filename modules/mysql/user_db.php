@@ -80,9 +80,15 @@ function exec_ogp_module() {
 	
 	$database_exists = FALSE;
 	$server_online = FALSE;
-	if(isset($_REQUEST['db_id']) AND $_REQUEST['db_id'] != "0")
+	
+	if((isset($_REQUEST['db_id']) AND $_REQUEST['db_id'] != "0") OR isset($_POST['save_db_changes']) AND $_POST['db_id'] != "0")
 	{
-		$db_id = $_REQUEST['db_id'];
+		if(isset($_REQUEST['db_id']))
+			$db_id = $_REQUEST['db_id'];
+		
+		if (isset($_POST['save_db_changes']))
+			$db_id = $_POST['db_id'];
+		
 		$mysql_db = $modDb->getMysqlHomeDBbyId($game_home['home_id'],$db_id);
 		
 		if(!$mysql_db)
@@ -175,6 +181,10 @@ function exec_ogp_module() {
 		
 		if($server_online and $database_exists)
 		{
+			?>
+			<form action="" method="post" class="form-group">
+			<input type="hidden" name="db_id" value="<?php echo $db_id; ?>">
+			<?php
 			echo "<table class='database' ><tr><td>\n<div class='dragbox bloc rounded' ><h4>".get_lang('db_info')."</h4>\n".
 				 "<table class='database_info' ><tr>".
 				 "<td><b>".get_lang('mysql_ip')." :</b></td><td>".$mysql_db['mysql_ip']."</td></tr>\n".
@@ -182,10 +192,102 @@ function exec_ogp_module() {
 				 "<td><b>".get_lang('db_name')." :</b></td><td>".$mysql_db['db_name']."</td></tr>\n".
 				 "<td><b>".get_lang('db_user')." :</b></td><td>".$mysql_db['db_user']."</td></tr>\n".
 				 "<td><b>".get_lang('db_passwd')." :</b></td><td>".$mysql_db['db_passwd']."</td></tr>\n".
+				 "<td><b>".get_lang('db_new_passwd')." :</b></td><td><input type="text" id="db_passwd" name="db_passwd" value="" size="25" class="form-control"></td></tr>"."\n".
+				 "<td></td><td><input type="submit" name="save_db_changes" value=".get_lang('db_save_passwd')." class="btn btn-sm btn-primary"></td></tr>"."\n".
 				 "<td><b>".get_lang('privilegies')." :</b></td><td>".$mysql_db['privilegies_str']."</td></tr></table></div>\n".
 				 "<td><div class='dragbox bloc rounded' style='background:black;' ><h4>".get_lang('db_tables')."</h4>".
 				 "<pre><xmp>".$user_db."</xmp></pre></div></td></tr></table>";
-			
+			?>
+			</form>
+			<?php			
+			if (isset($_POST['save_db_changes']))
+			{
+				$db_id = $db_id;
+				$home_id = $game_home['home_id'];
+				$post_db_user = trim($mysql_db['db_user']);
+				$post_db_passwd = trim($_POST['db_passwd']);
+				$post_db_name = trim($mysql_db['db_name']);
+				$enabled = 1;
+				
+				if ( empty($post_db_passwd) ){
+					print_failure(get_lang('enter_db_password'));
+				}
+				else
+				{
+					$mysql_db = $modDb->getMysqlDBbyId($db_id);
+					
+					if($post_db_passwd != $mysql_db['db_passwd'])
+					{
+						if($mysql_db['remote_server_id'] != "0")
+						{
+							$remote_server = $db->getRemoteServer($mysql_db['remote_server_id']);
+							$remote = new OGPRemoteLibrary($remote_server['agent_ip'],$remote_server['agent_port'],$remote_server['encryption_key'],$remote_server['timeout']);
+							$host_stat = $remote->status_chk();
+							if($host_stat === 1 )
+							{
+								$SQL = "DROP USER '".$mysql_db['db_user']."'@'%';".
+									   "GRANT ".$mysql_db['privilegies_str']." ON \\`".$mysql_db['db_name']."\\`.* TO '".$mysql_db['db_user']."'@'%' IDENTIFIED BY '".$post_db_passwd."';".
+									   "FLUSH PRIVILEGES;";
+									
+								$command = "mysql --host=localhost --port=".$mysql_db['mysql_port']." -uroot -p".$mysql_db['mysql_root_passwd']." -e \"".$SQL."\"";
+								$remote->exec($command);
+							}
+						}
+						else
+						{
+							if( function_exists('mysqli_connect') )
+							{
+								@$link = mysqli_connect($mysql_db['mysql_ip'], 'root', $mysql_db['mysql_root_passwd'], "", $mysql_db['mysql_port']);
+								
+								if ( $link !== FALSE )
+								{
+									$queries = array("DROP USER '".$mysql_db['db_user']."'@'%';",
+													 "GRANT ".$mysql_db['privilegies_str']." ON `".$mysql_db['db_name']."`.* TO '".$mysql_db['db_user']."'@'%' IDENTIFIED BY '".$post_db_passwd."';",
+													 "FLUSH PRIVILEGES;");
+									foreach( $queries as $query )
+									{
+										@$return = mysqli_query($link, $query);
+										if(!$return)
+											break;
+									}
+									mysqli_close($link);
+									$modDb->connect($db_host,$db_user,$db_pass,$db_name,$table_prefix);
+								}
+							}
+							else
+							{
+								@$link = mysql_connect($mysql_db['mysql_ip'].':'.$mysql_db['mysql_port'], 'root', $mysql_db['mysql_root_passwd']);
+								
+								if ( $link !== FALSE )
+								{
+									$queries = array("DROP USER '".$mysql_db['db_user']."'@'%';",
+													 "GRANT ".$mysql_db['privilegies_str']." ON `".$mysql_db['db_name']."`.* TO '".$mysql_db['db_user']."'@'%' IDENTIFIED BY '".$post_db_passwd."';",
+													 "FLUSH PRIVILEGES;");
+									foreach( $queries as $query )
+									{
+										@$return = mysql_query($query);
+										if(!$return)
+											break;
+									}
+									mysql_close($link);
+									$modDb->connect($db_host,$db_user,$db_pass,$db_name,$table_prefix);
+								}
+							}
+						}
+						
+						if ( $modDb->editMysqlServerDB($db_id, $home_id, $post_db_user, $post_db_passwd, $post_db_name, $enabled) === FALSE )
+						{       
+							print_failure(get_lang('could_not_be_changed'));
+						}
+						else
+						{
+							print_success(get_lang_f('db_changed_successfully',$post_db_name));
+						}
+						$view->refresh('?m=mysql&p=user_db&home_id='.$game_home['home_id'].'&db_id='.$db_id."&amp;assign");
+					}
+				}
+			}
+
 			if(suhosin_function_exists('system') or $mysql_db['remote_server_id'] != "0")
 			{
 				echo "<h2>".get_lang('db_backup')."</h2>";
